@@ -15,3 +15,9 @@ const TRANSICIONES = {
 export function puedePasar(desde, hasta) {
   return (TRANSICIONES[desde] ?? []).includes(hasta);
 }
+
+/** Si un pedido todavía se puede cancelar: mientras siga en cocina, o sea
+ *  antes de `servido`. Se deriva de TRANSICIONES para no tener dos listas. */
+export function puedeCancelarse(estado) {
+  return puedePasar(estado, "cancelado");
+}
