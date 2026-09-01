@@ -2,11 +2,12 @@
 // repo se publique como paquete (ver PENDIENTES.md) — y es exactamente el
 // problema que esa tarea resuelve: hoy un estado nuevo hay que agregarlo acá y
 // allá, y nada avisa si te olvidás de uno.
-export const ESTADOS = ["pedido", "en_preparacion", "servido", "pagado", "cancelado"];
+export const ESTADOS = ["pedido", "en_preparacion", "listo_para_servir", "servido", "pagado", "cancelado"];
 
 const TRANSICIONES = {
   pedido: ["en_preparacion", "cancelado"],
-  en_preparacion: ["servido", "cancelado"],
+  en_preparacion: ["listo_para_servir", "cancelado"],
+  listo_para_servir: ["servido", "cancelado"],
   servido: ["pagado"],
   pagado: [],
   cancelado: [],
