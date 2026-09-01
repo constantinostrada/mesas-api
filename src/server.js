@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { CARTA, mesas, mozos, pedidos, nuevoId } from "./store.js";
 import { asignarMozo } from "./asignacion.js";
-import { puedePasar } from "./estados.js";
+import { puedeCancelarse, puedePasar } from "./estados.js";
 
 const PORT = Number(process.env.PORT ?? 4000);
 
@@ -64,6 +64,24 @@ const server = createServer(async (req, res) => {
     };
     pedidos.push(pedido);
     return json(res, 201, { pedido });
+  }
+
+  // Cancelar tiene ruta propia y no es un POST /estado más: es una acción del
+  // salón ("el cliente se arrepintió"), no una edición del estado, y su regla
+  // —sólo mientras el pedido siga en cocina— merece un error que la explique
+  // en vez de un "transición inválida" genérico.
+  const cancelar = ruta.match(/^\/pedidos\/([^/]+)\/cancelar$/);
+  if (req.method === "POST" && cancelar) {
+    const pedido = pedidos.find((p) => p.id === cancelar[1]);
+    if (!pedido) return json(res, 404, { error: "El pedido no existe" });
+    if (pedido.estado === "cancelado")
+      return json(res, 409, { error: "El pedido ya está cancelado" });
+    if (!puedeCancelarse(pedido.estado))
+      return json(res, 409, {
+        error: `El pedido ya salió de la cocina (está "${pedido.estado}"): no se puede cancelar`,
+      });
+    pedido.estado = "cancelado";
+    return json(res, 200, { pedido });
   }
 
   const cambio = ruta.match(/^\/pedidos\/([^/]+)\/estado$/);

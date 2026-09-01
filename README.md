@@ -22,5 +22,6 @@ node src/server.js        # http://localhost:4000
 | `GET /pedidos?mozo_id=` | pedidos, opcionalmente filtrados por mozo |
 | `POST /pedidos` | crea un pedido y lo asigna a un mozo |
 | `POST /pedidos/:id/estado` | cambia el estado, validando la transición |
+| `POST /pedidos/:id/cancelar` | cancela el pedido, sólo mientras siga en cocina |
 
 El vocabulario (estados, transiciones, tipos) vive en `mesas-shared`.
