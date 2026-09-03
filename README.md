@@ -19,7 +19,7 @@ node src/server.js        # http://localhost:4000
 | `GET /mesas` | todas las mesas con su mozo |
 | `GET /mozos` | los mozos y si están activos |
 | `GET /carta` | la carta |
-| `GET /pedidos?mozo_id=` | pedidos, opcionalmente filtrados por mozo |
+| `GET /pedidos?mozo_id=&mesa_id=` | pedidos, opcionalmente filtrados por mozo y/o mesa (se acumulan) |
 | `POST /pedidos` | crea un pedido y lo asigna a un mozo |
 | `POST /pedidos/:id/estado` | cambia el estado, validando la transición |
 | `POST /pedidos/:id/cancelar` | cancela el pedido, si todavía no salió de cocina |

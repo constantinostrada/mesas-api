@@ -41,7 +41,19 @@ const server = createServer(async (req, res) => {
 
   if (req.method === "GET" && ruta === "/pedidos") {
     const mozo_id = url.searchParams.get("mozo_id");
-    const lista = mozo_id ? pedidos.filter((p) => p.mozo_id === mozo_id) : pedidos;
+    const mesa_id = url.searchParams.get("mesa_id");
+    // Una mesa que no existe es un pedido mal armado, no una mesa sin pedidos:
+    // devolver [] haría que la pantalla del cliente mostrara "todavía nada"
+    // para siempre sin que nadie se enterara del typo. Mismo 404 y mismo texto
+    // que POST /pedidos, que ya valida lo mismo.
+    if (mesa_id && !mesas.some((m) => m.id === mesa_id))
+      return json(res, 404, { error: "La mesa no existe" });
+    // Los filtros se acumulan (AND): el panel filtra por mozo, la pantalla del
+    // cliente por mesa, y pedir "los de esta mesa que atiende este mozo" tiene
+    // que poder responderse sin un endpoint nuevo.
+    const lista = pedidos.filter(
+      (p) => (!mozo_id || p.mozo_id === mozo_id) && (!mesa_id || p.mesa_id === mesa_id),
+    );
     // Más nuevos primero: el panel del mozo se lee de arriba hacia abajo.
     return json(res, 200, { pedidos: [...lista].sort((a, b) => b.creado_en - a.creado_en) });
   }
