@@ -16,3 +16,8 @@ const TRANSICIONES = {
 export function puedePasar(desde, hasta) {
   return (TRANSICIONES[desde] ?? []).includes(hasta);
 }
+
+/** Cancelable mientras el pedido siga en cocina. Ver el por qué en mesas-shared. */
+export function esCancelable(estado) {
+  return puedePasar(estado, "cancelado");
+}

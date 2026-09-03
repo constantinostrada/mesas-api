@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { CARTA, mesas, mozos, pedidos, nuevoId } from "./store.js";
 import { asignarMozo } from "./asignacion.js";
-import { puedePasar } from "./estados.js";
+import { puedePasar, esCancelable } from "./estados.js";
 
 const PORT = Number(process.env.PORT ?? 4000);
 
@@ -77,6 +77,21 @@ const server = createServer(async (req, res) => {
     if (!puedePasar(pedido.estado, destino))
       return json(res, 409, { error: `No se puede pasar de "${pedido.estado}" a "${destino}"` });
     pedido.estado = destino;
+    return json(res, 200, { pedido });
+  }
+
+  // Cancelar tiene endpoint propio y no un `POST /estado` con destino
+  // "cancelado": quien cancela no está eligiendo el próximo estado del pedido,
+  // está dándolo de baja, y no tiene por qué saber cómo se llama ese estado.
+  const cancelacion = ruta.match(/^\/pedidos\/([^/]+)\/cancelar$/);
+  if (req.method === "POST" && cancelacion) {
+    const pedido = pedidos.find((p) => p.id === cancelacion[1]);
+    if (!pedido) return json(res, 404, { error: "El pedido no existe" });
+    // Mismo 409 y misma redacción que /estado: para quien llama es la misma
+    // regla de la máquina rechazando, y dos textos para lo mismo confunden.
+    if (!esCancelable(pedido.estado))
+      return json(res, 409, { error: `No se puede pasar de "${pedido.estado}" a "cancelado"` });
+    pedido.estado = "cancelado";
     return json(res, 200, { pedido });
   }
 
