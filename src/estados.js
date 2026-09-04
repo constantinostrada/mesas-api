@@ -21,3 +21,36 @@ export function puedePasar(desde, hasta) {
 export function esCancelable(estado) {
   return puedePasar(estado, "cancelado");
 }
+
+/**
+ * Deshacer el último cambio de estado.
+ *
+ * Las inversas NO entran en TRANSICIONES a propósito: esa tabla es la que
+ * valida `POST /pedidos/:id/estado`, y meterlas ahí dejaría retroceder por ese
+ * endpoint salteándose la ventana de tiempo y el chequeo de autoría. Ver el
+ * porqué largo en mesas-shared.
+ */
+export const VENTANA_UNDO_MS = 30_000;
+
+/** Estados sin vuelta: el pedido ya se cobró o se dio de baja. */
+export const ESTADOS_TERMINALES = ["pagado", "cancelado"];
+
+export function esTerminal(estado) {
+  return ESTADOS_TERMINALES.includes(estado);
+}
+
+/**
+ * Se puede volver a `estadoAnterior` si desde ahí se llegó hasta el estado
+ * actual: la inversa se deriva de la transición de ida. Los terminales se
+ * excluyen a mano porque `servido → pagado` es una transición legal y sin esa
+ * línea un pedido cobrado volvería a `servido`.
+ */
+export function puedeDeshacer(estadoActual, estadoAnterior) {
+  if (esTerminal(estadoActual)) return false;
+  return puedePasar(estadoAnterior, estadoActual);
+}
+
+/** ¿Sigue abierta la ventana para deshacer un cambio hecho en `cambiadoEn`? */
+export function dentroDeVentanaUndo(cambiadoEn, ahora = Date.now()) {
+  return typeof cambiadoEn === "number" && ahora - cambiadoEn <= VENTANA_UNDO_MS;
+}
