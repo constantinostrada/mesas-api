@@ -1,7 +1,14 @@
 import { createServer } from "node:http";
 import { CARTA, mesas, mozos, pedidos, nuevoId } from "./store.js";
 import { asignarMozo } from "./asignacion.js";
-import { puedePasar, esCancelable } from "./estados.js";
+import {
+  puedePasar,
+  esCancelable,
+  esTerminal,
+  puedeDeshacer,
+  dentroDeVentanaUndo,
+  VENTANA_UNDO_MS,
+} from "./estados.js";
 
 const PORT = Number(process.env.PORT ?? 4000);
 
@@ -110,6 +117,57 @@ const server = createServer(async (req, res) => {
     pedido.estado_cambiado_en = Date.now();
     pedido.estado_cambiado_por = mozo_id;
     pedido.estado = destino;
+    return json(res, 200, { pedido });
+  }
+
+  // Deshacer el último cambio de estado. Endpoint propio y no un /estado con
+  // destino hacia atrás: quien deshace no está eligiendo el próximo estado del
+  // pedido, está anulando el cambio anterior — y las reglas que lo permiten,
+  // la ventana y la autoría, no aplican a ningún otro cambio.
+  const undo = ruta.match(/^\/pedidos\/([^/]+)\/deshacer$/);
+  if (req.method === "POST" && undo) {
+    const pedido = pedidos.find((p) => p.id === undo[1]);
+    if (!pedido) return json(res, 404, { error: "El pedido no existe" });
+    const body = await leerBody(req);
+    if (!body) return json(res, 400, { error: "JSON inválido" });
+    const { mozo_id } = body;
+    // Mismo orden que /estado: los campos primero y las reglas del dominio
+    // después, así un body incompleto no llega a chocar con la máquina.
+    if (!mozo_id)
+      return json(res, 400, { error: "mozo_id es obligatorio: identifica al mozo que deshace el cambio" });
+    if (!mozos.some((m) => m.id === mozo_id)) return json(res, 404, { error: "El mozo no existe" });
+    // Explícito y con su propio texto aunque puedeDeshacer ya lo cubra: al
+    // mozo que intenta deshacer un pedido cobrado le sirve saber que el
+    // problema es el estado, no la ventana ni de quién era el cambio.
+    if (esTerminal(pedido.estado))
+      return json(res, 409, { error: `No se puede deshacer un pedido "${pedido.estado}"` });
+    // Un pedido recién creado, o uno cuyo último cambio ya se deshizo. Va
+    // antes que la autoría porque sin cambio registrado no hay autor contra
+    // quien comparar.
+    if (pedido.estado_anterior === null)
+      return json(res, 409, { error: "El pedido no tiene ningún cambio de estado para deshacer" });
+    // La máquina, no el reloj: si desde estado_anterior no se llegaba al
+    // estado actual, los campos quedaron inconsistentes y revertir a ciegas
+    // dejaría el pedido en un estado al que nunca se pudo haber llegado.
+    if (!puedeDeshacer(pedido.estado, pedido.estado_anterior))
+      return json(res, 409, { error: `No se puede volver de "${pedido.estado}" a "${pedido.estado_anterior}"` });
+    // Antes que la ventana: a un mozo ajeno no le corresponde enterarse de en
+    // qué anda el reloj de un cambio que no hizo.
+    if (pedido.estado_cambiado_por !== mozo_id)
+      return json(res, 403, { error: "Sólo el mozo que hizo el cambio puede deshacerlo" });
+    if (!dentroDeVentanaUndo(pedido.estado_cambiado_en))
+      return json(res, 409, {
+        error: `La ventana para deshacer expiró: son ${VENTANA_UNDO_MS / 1000} segundos desde el cambio`,
+      });
+
+    pedido.estado = pedido.estado_anterior;
+    // Deshacer borra el cambio; no es un cambio nuevo. Por eso los tres campos
+    // vuelven a null en vez de registrar el undo: si lo registraran se podrían
+    // encadenar undos y caminar el pedido hasta el principio dentro de la
+    // ventana, que es justo lo que el límite de tiempo quiere evitar.
+    pedido.estado_anterior = null;
+    pedido.estado_cambiado_en = null;
+    pedido.estado_cambiado_por = null;
     return json(res, 200, { pedido });
   }
 
