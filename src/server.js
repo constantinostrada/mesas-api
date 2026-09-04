@@ -73,6 +73,12 @@ const server = createServer(async (req, res) => {
       items,
       estado: "pedido",
       creado_en: Date.now(),
+      // Nacen en null y no ausentes: si el pedido cambia de forma según si ya
+      // lo tocaron o no, quien lee GET /pedidos tiene que preguntarse si el
+      // campo falta o si vale null. Nacer en "pedido" no es un cambio.
+      estado_anterior: null,
+      estado_cambiado_en: null,
+      estado_cambiado_por: null,
     };
     pedidos.push(pedido);
     return json(res, 201, { pedido });
@@ -83,11 +89,26 @@ const server = createServer(async (req, res) => {
     const pedido = pedidos.find((p) => p.id === cambio[1]);
     if (!pedido) return json(res, 404, { error: "El pedido no existe" });
     const body = await leerBody(req);
-    const destino = body?.estado;
+    if (!body) return json(res, 400, { error: "JSON inválido" });
+    const { estado: destino, mozo_id } = body;
+    // Los campos primero y las reglas del dominio después: un body al que le
+    // falta mozo_id no llega a ser una transición mal pedida, y un 409 que
+    // dice `a "undefined"` manda a leer el código en vez de al campo.
+    if (!mozo_id)
+      return json(res, 400, { error: "mozo_id es obligatorio: identifica al mozo que cambia el estado" });
+    // Mismo criterio y mismo texto que mesa_id en POST /pedidos: un id que no
+    // existe es un typo del que llama, no un mozo sin pedidos.
+    if (!mozos.some((m) => m.id === mozo_id)) return json(res, 404, { error: "El mozo no existe" });
     // El error dice DESDE dónde y HACIA dónde: "transición inválida" a secas
     // obliga a ir a leer el código para entender qué se podía hacer.
     if (!puedePasar(pedido.estado, destino))
       return json(res, 409, { error: `No se puede pasar de "${pedido.estado}" a "${destino}"` });
+    // Se pisan en cada cambio: lo que hace falta es el último, no el historial.
+    // Y se escriben juntos, en el mismo lugar donde muta el estado, para que no
+    // exista un pedido que ya cambió pero todavía no dice quién lo cambió.
+    pedido.estado_anterior = pedido.estado;
+    pedido.estado_cambiado_en = Date.now();
+    pedido.estado_cambiado_por = mozo_id;
     pedido.estado = destino;
     return json(res, 200, { pedido });
   }
